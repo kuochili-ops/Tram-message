@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>𓃥 白六電車訊息</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #121316;
+      color: #ececec;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    #canvas-container {
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+
+    /* 控制儀表板 (預設收合) */
+    .dashboard {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 10;
+      width: 360px;
+      max-height: calc(100vh - 120px);
+      background: rgba(24, 25, 32, 0.92);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow: hidden;
+    }
+
+    .dashboard.collapsed .dashboard-content {
+      display: none;
+    }
+
+    .dashboard-header {
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.03);
+      user-select: none;
+    }
+
+    .dashboard-header h1 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #61afef;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toggle-icon {
+      font-size: 0.85rem;
+      color: #abb2bf;
+      transition: transform 0.3s ease;
+    }
+
+    .dashboard.collapsed .toggle-icon {
+      transform: rotate(-90deg);
+    }
+
+    .dashboard-content {
+      padding: 0 18px 18px 18px;
+      max-height: calc(100vh - 180px);
+      overflow-y: auto;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .card-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #abb2bf;
+      margin-bottom: 8px;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .preview-container {
+      width: 100%;
+      height: 110px;
+      background: #181920;
+      border: 1px dashed rgba(255, 255, 255, 0.3);
+      border-radius: 6px;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 8px;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .preview-container:active {
+      cursor: grabbing;
+    }
+
+    #preview-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .file-input-wrapper {
+      position: relative;
+      margin-bottom: 8px;
+    }
+
+    .file-input-wrapper input[type="file"] {
+      display: none;
+    }
+
+    .color-picker-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .color-picker-row label {
+      font-size: 0.8rem;
+      color: #abb2bf;
+    }
+
+    .color-picker-row input[type="color"] {
+      border: none;
+      width: 44px;
+      height: 28px;
+      border-radius: 4px;
+      cursor: pointer;
+      background: none;
+    }
+
+    .input-textarea {
+      width: 100%;
+      height: 80px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      color: #fff;
+      padding: 8px 10px;
+      font-size: 0.82rem;
+      margin-bottom: 8px;
+      resize: vertical;
+    }
+
+    .input-textarea:focus {
+      outline: none;
+      border-color: #61afef;
+    }
+
+    .btn {
+      display: inline-block;
+      width: 100%;
+      padding: 8px 12px;
+      background: #4b5263;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+      font-size: 0.8rem;
+      margin-bottom: 6px;
+    }
+
+    .btn:hover {
+      background: #5c6370;
+    }
+
+    .btn-primary {
+      background: #98c379;
+      color: #1e222a;
+    }
+
+    .btn-primary:hover {
+      background: #b5e896;
+    }
+
+    .control-group {
+      margin-top: 6px;
+    }
+
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: #abb2bf;
+      margin-bottom: 4px;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: #abb2bf;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      accent-color: #61afef;
+      width: 16px;
+      height: 16px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: #61afef;
+    }
+
+    /* 底部控制列：橫向並排 */
+    .bottom-dock {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      flex-direction: row; 
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(24, 25, 32, 0.88);
+      backdrop-filter: blur(16px);
+      padding: 8px 14px;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+      max-width: 92vw;
+    }
+
+    .dock-btn {
+      background: #282c34;
+      color: #ececec;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      white-space: nowrap; 
+      transition: all 0.2s ease;
+    }
+
+    .dock-btn:hover {
+      background: #3b404d;
+      border-color: #61afef;
+      color: #61afef;
+    }
+
+    .dock-btn.active {
+      background: #61afef;
+      color: #121316;
+      border-color: #61afef;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 85px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #98c379;
+      color: #1e222a;
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 200;
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+
+  <div id="toast" class="toast">圖片已成功更新至車身！</div>
+  <div id="canvas-container"></div>
+
+  <!-- 常駐控制列（橫式並排） -->
+  <div class="bottom-dock">
+    <button class="dock-btn" id="dock-btn-follow">🎥 跟拍視角：自由視角</button>
+    <button class="dock-btn" id="dock-btn-pause">⏸️ 暫停行駛</button>
+  </div>
+
+  <!-- 控制面板 (預設收合) -->
+  <div class="dashboard collapsed" id="dashboard">
+    <div class="dashboard-header" id="dashboard-toggle">
+      <h1>𓃥 白六電車訊息</h1>
+      <span class="toggle-icon">▼</span>
+    </div>
+
+    <div class="dashboard-content">
+      <div class="card">
+        <div class="card-title">右後半車身圖片排版預視區</div>
+        
+        <div class="file-input-wrapper">
+          <label for="img-upload" class="btn" style="background:#61afef; color:#121316; margin-bottom:0;">📁 選擇 / 上傳圖片</label>
+          <input type="file" id="img-upload" accept="image/*" />
+        </div>
+
+        <div class="preview-container" id="preview-box">
+          <canvas id="preview-canvas" width="2000" height="708"></canvas>
+        </div>
+
+        <button class="btn" id="btn-flip-h" style="background:#3b404d; margin-bottom:8px;">↔️ 左右鏡像翻轉照片</button>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chk-remove-bg" checked />
+          <span>✨ 智慧連通背景去背 (自動轉純透明)</span>
+        </label>
+
+        <!-- 新增：車體對側是否左右鏡像選單 -->
+        <label class="checkbox-row">
+          <input type="checkbox" id="chk-mirror-opposite" checked />
+          <span>↔️ 車體對側 (左側) 圖片左右鏡像</span>
+        </label>
+
+        <div class="control-group" id="group-tolerance">
+          <label><span>背景容差 (Tolerance)</span><span id="val-tolerance">35</span></label>
+          <input type="range" id="slider-tolerance" min="10" max="80" step="1" value="35" />
+        </div>
+
+        <div class="control-group">
+          <label><span>縮放 (Scale)</span><span id="val-scale">1.0</span></label>
+          <input type="range" id="slider-scale" min="0.2" max="3.0" step="0.05" value="1.0" />
+        </div>
+
+        <div class="control-group">
+          <label><span>旋轉 (Rotate)</span><span id="val-rotate">0°</span></label>
+          <input type="range" id="slider-rotate" min="-180" max="180" step="1" value="0" />
+        </div>
+
+        <div class="control-group">
+          <label><span>亮度 (Brightness)</span><span id="val-brightness">1.0</span></label>
+          <input type="range" id="slider-brightness" min="0.1" max="2.0" step="0.05" value="1.0" />
+        </div>
+
+        <button class="btn btn-primary" id="btn-apply-img" style="margin-top:8px;">✅ 確定更新圖片至車身</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">多行訊息（每班車切換一行）</div>
+        <textarea id="ad-text-input" class="input-textarea" placeholder="請輸入多行訊息，每班車將顯示一行...">𓃥 白六電車訊息：第一班車宣傳
+𓃥 雙軌對開對齊：第二班車宣傳
+𓃥 滿版超大文字：第三班車宣傳</textarea>
+        <button class="btn btn-primary" id="btn-update-text">✏️ 更新訊息陣列</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">看板色彩自訂</div>
+        <div class="color-picker-row">
+          <label for="color-banner-bg">看板背景顏色</label>
+          <input type="color" id="color-banner-bg" value="#0f2027" />
+        </div>
+        <div class="color-picker-row">
+          <label for="color-banner-text">看板文字顏色</label>
+          <input type="color" id="color-banner-text" value="#ffffff" />
+        </div>
+
+        <div class="control-group">
+          <label><span>廣告透明度</span><span id="val-opacity">0.95</span></label>
+          <input type="range" id="slider-opacity" min="0.1" max="1.0" step="0.05" value="0.95" />
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">雙軌對開動態控制</div>
+        <div class="control-group">
+          <label><span>車速 (Speed)</span><span id="val-speed">12</span></label>
+          <input type="range" id="slider-speed" min="0" max="30" step="1" value="12" />
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">視角控制</div>
+        <button class="btn" id="btn-reset-cam">🎥 重置觀察視角</button>
+        <button class="btn" id="btn-toggle-rotate">🔄 自動旋轉鏡頭</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    let scene, camera, renderer, controls;
+    let modelA, modelB;
+    let textureA = null, textureB = null;
+    let materialA = null, materialB = null;
+
+    let windowTextureARight = null, windowTextureALeft = null;
+    let windowTextureBRight = null, windowTextureBLeft = null;
+
+    let autoRotate = false;
+    let isDriving = true;
+    let driveSpeed = 12;
+
+    let bannerBgColor = "#0f2027";
+    let bannerTextColor = "#ffffff";
+
+    let followMode = 0;
+
+    let messageList = [];
+    let carAIndex = 0; 
+    let carBIndex = 1; 
+
+    const trackDistance = 3.6;  
+    const trackLength = 160.0;
+    const railGauge = 1.10;     
+    const carLength = 10.0;     
+    let carAPosX = -20;
+    let carBPosX = 20;
+
+    let rawSourceImage = null; // 原始圖片
+    let loadedImage = null;    // 去背後圖像
+    let imgOffsetX = 0;
+    let imgOffsetY = 0;
+    let imgScale = 1.0;
+    let imgRotation = 0;
+    let imgBrightness = 1.0;
+    let isFlippedH = false; 
+    let removeBg = true;
+    let bgTolerance = 35;
+    let mirrorOppositeSide = true; // 車體對側是否左右鏡像控制變數
+
+    const previewCanvas = document.getElementById('preview-canvas');
+    const previewCtx = previewCanvas.getContext('2d');
+
+    const dashboard = document.getElementById('dashboard');
+    const dashboardToggle = document.getElementById('dashboard-toggle');
+    const toastEl = document.getElementById('toast');
+
+    const dockBtnFollow = document.getElementById('dock-btn-follow');
+    const dockBtnPause = document.getElementById('dock-btn-pause');
+
+    init();
+
+    function init() {
+      const container = document.getElementById('canvas-container');
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1d24);
+
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(22, 8, 18);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      container.appendChild(renderer.domElement);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.target.set(0, 1.5, 0);
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 3.0);
+      dirLight.position.set(30, 50, 30);
+      scene.add(dirLight);
+
+      const fillLight = new THREE.DirectionalLight(0x90b0ff, 1.5);
+      fillLight.position.set(-30, 20, -30);
+      scene.add(fillLight);
+
+      createOnlyRailsTrack();
+      updateMessageListFromInput();
+
+      carAIndex = 0;
+      carBIndex = 1 % messageList.length;
+
+      modelA = createCustomTramModel('A', 'White 6');
+      modelA.position.set(carAPosX, 0, trackDistance / 2);
+      scene.add(modelA);
+
+      modelB = createCustomTramModel('B', 'Chili');
+      modelB.rotation.y = Math.PI;
+      modelB.position.set(carBPosX, 0, -trackDistance / 2);
+      scene.add(modelB);
+
+      drawPreviewCanvas();
+
+      window.addEventListener('resize', onWindowResize);
+      setupUIControls();
+      setupImageInteraction();
+      animate();
+    }
+
+    function createOnlyRailsTrack() {
+      const trackGroup = new THREE.Group();
+      const railGeo = new THREE.BoxGeometry(trackLength, 0.14, 0.12);
+      const railMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.9, roughness: 0.1 });
+
+      [trackDistance / 2, -trackDistance / 2].forEach((trackCenterZ) => {
+        const rail1 = new THREE.Mesh(railGeo, railMat);
+        rail1.position.set(0, 0.07, trackCenterZ + (railGauge / 2));
+        trackGroup.add(rail1);
+
+        const rail2 = new THREE.Mesh(railGeo, railMat);
+        rail2.position.set(0, 0.07, trackCenterZ - (railGauge / 2));
+        trackGroup.add(rail2);
+      });
+
+      const groundGeo = new THREE.PlaneGeometry(trackLength, trackDistance * 4);
+      const groundMat = new THREE.MeshStandardMaterial({ color: 0x22252e });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      trackGroup.add(ground);
+
+      scene.add(trackGroup);
+    }
+
+    function createRoundedRectShape(width, height, radius) {
+      const shape = new THREE.Shape();
+      const x = -width / 2;
+      const y = -height / 2;
+      shape.moveTo(x, y + radius);
+      shape.lineTo(x, y + height - radius);
+      shape.quadraticCurveTo(x, y + height, x + radius, y + height);
+      shape.lineTo(x + width - radius, y + height);
+      shape.quadraticCurveTo(x + width, y + height, x + width, y + height - radius);
+      shape.lineTo(x + width, y + radius);
+      shape.quadraticCurveTo(x + width, y, x + width - radius, y);
+      shape.lineTo(x + radius, y);
+      shape.quadraticCurveTo(x, y, x, y + radius);
+      return shape;
+    }
+
+    function createDestinationSignCanvas(tramName) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#0a0d14';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = '#61afef';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(6, 6, canvas.width - 12, canvas.height - 12);
+
+      ctx.fillStyle = '#98c379';
+      ctx.font = 'bold 72px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(tramName, canvas.width / 2, canvas.height / 2);
+
+      return canvas;
+    }
+
+    function createCustomTramModel(carType, tramName) {
+      const tramGroup = new THREE.Group();
+
+      const bodyMat = new THREE.MeshStandardMaterial({ color: 0x5c4232, roughness: 0.3 });
+      const frameMat = new THREE.MeshStandardMaterial({ color: 0xf0ece1, roughness: 0.2 });
+      
+      const mainGlassMat = new THREE.MeshStandardMaterial({ color: 0x2b3e50, roughness: 0.1, transparent: true, opacity: 0.5 });
+
+      const halfL = carLength / 2;
+
+      // 1. 車身下半部
+      const bodyShape = createRoundedRectShape(2.18, 1.3, 0.25);
+      const bodyExtrudeSettings = { depth: carLength, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.08, bevelThickness: 0.08 };
+      const bodyGeo = new THREE.ExtrudeGeometry(bodyShape, bodyExtrudeSettings);
+      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+      bodyMesh.rotation.y = Math.PI / 2;
+      bodyMesh.position.set(-halfL, 0.95, 0);
+      tramGroup.add(bodyMesh);
+
+      // 2. 玻璃主體結構
+      const glassShape = createRoundedRectShape(2.05, 1.18, 0.2);
+      const glassGeo = new THREE.ExtrudeGeometry(glassShape, { depth: carLength - 0.2, bevelEnabled: true, bevelSegments: 2, bevelSize: 0.04, bevelThickness: 0.04 });
+      const glassMesh = new THREE.Mesh(glassGeo, mainGlassMat);
+      glassMesh.rotation.y = Math.PI / 2;
+      glassMesh.position.set(-(halfL - 0.1), 2.2, 0);
+      tramGroup.add(glassMesh);
+
+      // 2.5 車側貼圖牆（寬 5.0m、高 1.77m）
+      const sideWallWidth = 5.0;            
+      const sideWallHeight = 1.77;           
+      const sideWallGeo = new THREE.PlaneGeometry(sideWallWidth, sideWallHeight);
+
+      const initCanvasRight = document.createElement('canvas');
+      initCanvasRight.width = 2000;
+      initCanvasRight.height = 708;
+      const winTexRight = new THREE.CanvasTexture(initCanvasRight);
+      winTexRight.format = THREE.RGBAFormat;
+      winTexRight.minFilter = THREE.LinearFilter;
+      winTexRight.magFilter = THREE.LinearFilter;
+
+      const initCanvasLeft = document.createElement('canvas');
+      initCanvasLeft.width = 2000;
+      initCanvasLeft.height = 708;
+      const winTexLeft = new THREE.CanvasTexture(initCanvasLeft);
+      winTexLeft.format = THREE.RGBAFormat;
+      winTexLeft.minFilter = THREE.LinearFilter;
+      winTexLeft.magFilter = THREE.LinearFilter;
+
+      const winMatRight = new THREE.MeshBasicMaterial({
+        map: winTexRight,
+        transparent: true,
+        premultipliedAlpha: true,
+        side: THREE.DoubleSide
+      });
+
+      const winMatLeft = new THREE.MeshBasicMaterial({
+        map: winTexLeft,
+        transparent: true,
+        premultipliedAlpha: true,
+        side: THREE.DoubleSide
+      });
+
+      if (carType === 'A') {
+        windowTextureARight = winTexRight;
+        windowTextureALeft = winTexLeft;
+      } else {
+        windowTextureBRight = winTexRight;
+        windowTextureBLeft = winTexLeft;
+      }
+
+      const winRight = new THREE.Mesh(sideWallGeo, winMatRight);
+      winRight.position.set(-2.5, 2.335, 1.11);
+      winRight.renderOrder = 20;
+      tramGroup.add(winRight);
+
+      const winLeft = new THREE.Mesh(sideWallGeo, winMatLeft);
+      winLeft.position.set(-2.5, 2.335, -1.11);
+      winLeft.rotation.y = Math.PI;
+      winLeft.renderOrder = 20;
+      tramGroup.add(winLeft);
+
+      // 3. 車窗窗框
+      const topFrame = new THREE.Mesh(new THREE.BoxGeometry(carLength - 0.18, 0.1, 2.18), frameMat);
+      topFrame.position.y = 2.75;
+      tramGroup.add(topFrame);
+
+      const bottomFrame = new THREE.Mesh(new THREE.BoxGeometry(carLength - 0.18, 0.1, 2.18), frameMat);
+      bottomFrame.position.y = 1.65;
+      tramGroup.add(bottomFrame);
+
+      for (let x = -(halfL - 1.0); x <= (halfL - 1.0); x += 1.5) {
+        [-1.091, 1.091].forEach((zPos) => {
+          const vertFrame = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.03), frameMat);
+          vertFrame.position.set(x, 2.2, zPos);
+          tramGroup.add(vertFrame);
+        });
+      }
+
+      // 4. 車頂
+      const roofShape = createRoundedRectShape(2.18, 0.42, 0.15);
+      const roofGeo = new THREE.ExtrudeGeometry(roofShape, { depth: carLength + 0.2, bevelEnabled: false });
+      const roofMat = new THREE.MeshStandardMaterial({ color: 0xd8dce4, roughness: 0.4 });
+      const roof = new THREE.Mesh(roofGeo, roofMat);
+      roof.rotation.y = Math.PI / 2;
+      roof.position.set(-(halfL + 0.1), 3.01, 0);
+      tramGroup.add(roof);
+
+      // 5. 車頭獨立車名牌與頭燈
+      [halfL + 0.01, -(halfL + 0.01)].forEach((xPos) => {
+        const isFront = xPos > 0;
+
+        const centerPillar = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.18, 0.08), frameMat);
+        centerPillar.position.set(xPos, 2.2, 0);
+        tramGroup.add(centerPillar);
+
+        const signGeo = new THREE.PlaneGeometry(1.4, 0.34);
+        const signCanvas = createDestinationSignCanvas(tramName);
+        const signTex = new THREE.CanvasTexture(signCanvas);
+
+        const signMat = new THREE.MeshBasicMaterial({ 
+          map: signTex, 
+          side: THREE.FrontSide,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+          polygonOffsetUnits: -2
+        });
+
+        const signMesh = new THREE.Mesh(signGeo, signMat);
+        signMesh.rotation.y = isFront ? Math.PI / 2 : -Math.PI / 2;
+        signMesh.position.set(xPos + (isFront ? 0.18 : -0.18), 2.95, 0);
+        tramGroup.add(signMesh);
+
+        const lightGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.1, 16);
+        const lightMat = new THREE.MeshBasicMaterial({ color: 0xfff0b3 });
+
+        [-(railGauge / 2), (railGauge / 2)].forEach((zPos) => {
+          const headlight = new THREE.Mesh(lightGeo, lightMat);
+          headlight.rotation.z = Math.PI / 2;
+          headlight.position.set(xPos + (isFront ? 0.12 : -0.12), 1.1, zPos);
+          tramGroup.add(headlight);
+        });
+      });
+
+      // 6. 輪組
+      const wheelRadius = 0.30;
+      const wheelGeo = new THREE.CylinderGeometry(wheelRadius, wheelRadius, 0.1, 16);
+      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x151515, metalness: 0.8 });
+      const flangeGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.02, 16);
+
+      [-3.0, 3.0].forEach((xOffset) => {
+        [-(railGauge / 2), (railGauge / 2)].forEach((zOffset) => {
+          const wheelGroup = new THREE.Group();
+
+          const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+          wheel.rotation.x = Math.PI / 2;
+          wheelGroup.add(wheel);
+
+          const flange = new THREE.Mesh(flangeGeo, wheelMat);
+          flange.rotation.x = Math.PI / 2;
+          flange.position.z = zOffset > 0 ? -0.05 : 0.05;
+          wheelGroup.add(flange);
+
+          wheelGroup.position.set(xOffset, 0.44, zOffset);
+          tramGroup.add(wheelGroup);
+        });
+      });
+
+      // 7. 車側動態廣告看板
+      const bannerWidth = 10.0; 
+      const bannerHeight = 1.0;  
+      const geometry = new THREE.PlaneGeometry(bannerWidth, bannerHeight);
+
+      const initialText = carType === 'A' ? messageList[carAIndex] : messageList[carBIndex];
+      const initialCanvas = createMaxTextCanvas(initialText);
+      const canvasTexture = new THREE.CanvasTexture(initialCanvas);
+
+      const mat = new THREE.MeshStandardMaterial({
+        map: canvasTexture,
+        transparent: true,
+        opacity: 0.95,
+        side: THREE.DoubleSide,
+        roughness: 0.2
+      });
+
+      if (carType === 'A') {
+        textureA = canvasTexture;
+        materialA = mat;
+      } else {
+        textureB = canvasTexture;
+        materialB = mat;
+      }
+
+      const bannerRight = new THREE.Mesh(geometry, mat);
+      bannerRight.position.set(0, 0.95, 1.18);
+      tramGroup.add(bannerRight);
+
+      const bannerLeft = new THREE.Mesh(geometry, mat);
+      bannerLeft.position.set(0, 0.95, -1.18);
+      bannerLeft.rotation.y = Math.PI;
+      tramGroup.add(bannerLeft);
+
+      return tramGroup;
+    }
+
+    function createMaxTextCanvas(text) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 2048;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = bannerBgColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = '#98c379';
+      ctx.lineWidth = 14;
+      ctx.strokeRect(10, 10, canvas.width - 20, canvas.height - 20);
+
+      const targetText = text || "𓃥 白六電車訊息";
+
+      let fontSize = 200;
+      ctx.font = `bold ${fontSize}px "PingFang TC", "Microsoft JhengHei", sans-serif`;
+      let textWidth = ctx.measureText(targetText).width;
+
+      while (textWidth > canvas.width * 0.94 && fontSize > 30) {
+        fontSize -= 4;
+        ctx.font = `bold ${fontSize}px "PingFang TC", "Microsoft JhengHei", sans-serif`;
+        textWidth = ctx.measureText(targetText).width;
+      }
+
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+
+      const scaleX = (canvas.width * 0.94) / textWidth;
+      const scaleY = 1.35;
+      ctx.scale(Math.max(scaleX, 1.0), scaleY);
+
+      ctx.fillStyle = bannerTextColor;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(targetText, 0, 0);
+
+      ctx.restore();
+
+      return canvas;
+    }
+
+    // 智慧連通背景去背演算法
+    function processImageBackground(imgObj) {
+      if (!removeBg) {
+        loadedImage = imgObj;
+        drawPreviewCanvas();
+        applyImageToTramWindows();
+        return;
+      }
+
+      const w = imgObj.width;
+      const h = imgObj.height;
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = w;
+      tempCanvas.height = h;
+      const tCtx = tempCanvas.getContext('2d');
+
+      tCtx.drawImage(imgObj, 0, 0);
+      const imgData = tCtx.getImageData(0, 0, w, h);
+      const data = imgData.data;
+
+      const bgR = data[0];
+      const bgG = data[1];
+      const bgB = data[2];
+
+      const visited = new Uint8Array(w * h);
+      const queue = [];
+
+      const seeds = [[0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1]];
+      seeds.forEach(([sx, sy]) => {
+        const idx = sy * w + sx;
+        visited[idx] = 1;
+        queue.push(sx, sy);
+      });
+
+      while (queue.length > 0) {
+        const cy = queue.pop();
+        const cx = queue.pop();
+        const p = (cy * w + cx) * 4;
+
+        const r = data[p];
+        const g = data[p + 1];
+        const b = data[p + 2];
+
+        const diff = Math.abs(r - bgR) + Math.abs(g - bgG) + Math.abs(b - bgB);
+
+        if (diff <= bgTolerance * 3 || (r > 220 && g > 220 && b > 220)) {
+          data[p + 3] = 0;
+
+          const neighbors = [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]];
+          for (let i = 0; i < 4; i++) {
+            const [nx, ny] = neighbors[i];
+            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+              const nIdx = ny * w + nx;
+              if (!visited[nIdx]) {
+                visited[nIdx] = 1;
+                queue.push(nx, ny);
+              }
+            }
+          }
+        }
+      }
+
+      tCtx.putImageData(imgData, 0, 0);
+
+      const processedImg = new Image();
+      processedImg.onload = () => {
+        loadedImage = processedImg;
+        drawPreviewCanvas();
+        applyImageToTramWindows();
+      };
+      processedImg.src = tempCanvas.toDataURL('image/png');
+    }
+
+    function drawPreviewCanvas() {
+      const w = previewCanvas.width;
+      const h = previewCanvas.height;
+
+      previewCtx.clearRect(0, 0, w, h);
+
+      const winTop = h * 0.15;
+      const winHeight = h * 0.65;
+
+      previewCtx.fillStyle = 'rgba(43, 62, 80, 0.35)';
+      previewCtx.fillRect(0, winTop, w, winHeight);
+
+      previewCtx.strokeStyle = 'rgba(97, 175, 239, 0.5)';
+      previewCtx.lineWidth = 4;
+      previewCtx.setLineDash([16, 16]);
+      previewCtx.strokeRect(0, winTop, w, winHeight);
+      previewCtx.setLineDash([]);
+
+      if (loadedImage) {
+        const drawW = loadedImage.width;
+        const drawH = loadedImage.height;
+
+        let posX = w / 2 + (imgOffsetX * 4);
+        let posY = h / 2 + (imgOffsetY * 4);
+
+        previewCtx.save();
+        previewCtx.translate(posX, posY);
+        previewCtx.rotate((imgRotation * Math.PI) / 180);
+        previewCtx.scale(isFlippedH ? -imgScale : imgScale, imgScale);
+
+        previewCtx.filter = `brightness(${imgBrightness})`;
+
+        previewCtx.imageSmoothingEnabled = true;
+        previewCtx.imageSmoothingQuality = 'high';
+        previewCtx.drawImage(loadedImage, -drawW / 2, -drawH / 2, drawW, drawH);
+        previewCtx.restore();
+      } else {
+        previewCtx.fillStyle = '#98c379';
+        previewCtx.font = 'bold 72px sans-serif';
+        previewCtx.textAlign = 'center';
+        previewCtx.textBaseline = 'middle';
+        previewCtx.fillText('點擊上傳圖片 (4K 超高畫質排版)', w / 2, h / 2);
+      }
+    }
+
+    // 產生純透明 Alpha 底色的 3D 貼圖 Canvas（可控制是否對側鏡像）
+    function generateCleanTextureCanvas(shouldMirror = false) {
+      const cleanCanvas = document.createElement('canvas');
+      cleanCanvas.width = previewCanvas.width;
+      cleanCanvas.height = previewCanvas.height;
+      const ctx = cleanCanvas.getContext('2d', { alpha: true });
+
+      ctx.clearRect(0, 0, cleanCanvas.width, cleanCanvas.height);
+
+      if (loadedImage) {
+        const w = cleanCanvas.width;
+        const h = cleanCanvas.height;
+        const drawW = loadedImage.width;
+        const drawH = loadedImage.height;
+
+        let posX = w / 2 + (imgOffsetX * 4);
+        let posY = h / 2 + (imgOffsetY * 4);
+
+        ctx.save();
+        if (shouldMirror) {
+          ctx.translate(w, 0);
+          ctx.scale(-1, 1);
+        }
+
+        ctx.translate(posX, posY);
+        ctx.rotate((imgRotation * Math.PI) / 180);
+        ctx.scale(isFlippedH ? -imgScale : imgScale, imgScale);
+
+        ctx.filter = `brightness(${imgBrightness})`;
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(loadedImage, -drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.restore();
+      }
+
+      return cleanCanvas;
+    }
+
+    function applyImageToTramWindows() {
+      const rightImg = generateCleanTextureCanvas(false);
+      // 根據使用者設定決定對側 (左側) 是否進行水平鏡像翻轉
+      const leftImg = generateCleanTextureCanvas(mirrorOppositeSide);
+
+      if (windowTextureARight) {
+        windowTextureARight.image = rightImg;
+        windowTextureARight.needsUpdate = true;
+      }
+      if (windowTextureALeft) {
+        windowTextureALeft.image = leftImg;
+        windowTextureALeft.needsUpdate = true;
+      }
+      if (windowTextureBRight) {
+        windowTextureBRight.image = rightImg;
+        windowTextureBRight.needsUpdate = true;
+      }
+      if (windowTextureBLeft) {
+        windowTextureBLeft.image = leftImg;
+        windowTextureBLeft.needsUpdate = true;
+      }
+    }
+
+    function setupImageInteraction() {
+      const box = document.getElementById('preview-box');
+      let isDragging = false;
+      let startX = 0, startY = 0;
+
+      box.addEventListener('mousedown', (e) => {
+        if (!loadedImage) return;
+        isDragging = true;
+        startX = e.clientX - imgOffsetX;
+        startY = e.clientY - imgOffsetY;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        imgOffsetX = e.clientX - startX;
+        imgOffsetY = e.clientY - startY;
+        drawPreviewCanvas();
+        applyImageToTramWindows();
+      });
+
+      window.addEventListener('mouseup', () => isDragging = false);
+
+      let initialTouchDist = 0;
+
+      box.addEventListener('touchstart', (e) => {
+        if (!loadedImage) return;
+        if (e.touches.length === 1) {
+          isDragging = true;
+          startX = e.touches[0].clientX - imgOffsetX;
+          startY = e.touches[0].clientY - imgOffsetY;
+        } else if (e.touches.length === 2) {
+          isDragging = false;
+          initialTouchDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+        }
+      });
+
+      box.addEventListener('touchmove', (e) => {
+        if (!loadedImage) return;
+        if (isDragging && e.touches.length === 1) {
+          imgOffsetX = e.touches[0].clientX - startX;
+          imgOffsetY = e.touches[0].clientY - startY;
+          drawPreviewCanvas();
+          applyImageToTramWindows();
+        } else if (e.touches.length === 2) {
+          const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          const factor = dist / initialTouchDist;
+          imgScale = Math.min(Math.max(imgScale * factor, 0.2), 3.0);
+          initialTouchDist = dist;
+          document.getElementById('slider-scale').value = imgScale;
+          document.getElementById('val-scale').innerText = imgScale.toFixed(2);
+          drawPreviewCanvas();
+          applyImageToTramWindows();
+        }
+      });
+
+      box.addEventListener('touchend', () => isDragging = false);
+    }
+
+    function updateMessageListFromInput() {
+      const rawVal = document.getElementById('ad-text-input').value;
+      messageList = rawVal.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+      if (messageList.length === 0) {
+        messageList = ["𓃥 白六電車訊息"];
+      }
+    }
+
+    function updateCarATextureNextShift() {
+      if (!textureA || messageList.length === 0) return;
+      carAIndex = (carAIndex + 1) % messageList.length;
+      textureA.image = createMaxTextCanvas(messageList[carAIndex]);
+      textureA.needsUpdate = true;
+    }
+
+    function updateCarBTextureNextShift() {
+      if (!textureB || messageList.length === 0) return;
+      carBIndex = (carBIndex + 1) % messageList.length;
+      textureB.image = createMaxTextCanvas(messageList[carBIndex]);
+      textureB.needsUpdate = true;
+    }
+
+    function updateAllBannerCanvas() {
+      if (textureA) {
+        textureA.image = createMaxTextCanvas(messageList[carAIndex]);
+        textureA.needsUpdate = true;
+      }
+      if (textureB) {
+        textureB.image = createMaxTextCanvas(messageList[carBIndex]);
+        textureB.needsUpdate = true;
+      }
+    }
+
+    function setupUIControls() {
+      dashboardToggle.addEventListener('click', () => dashboard.classList.toggle('collapsed'));
+
+      document.getElementById('img-upload').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const maxDim = 4096;
+            let targetW = img.width;
+            let targetH = img.height;
+
+            if (targetW > maxDim || targetH > maxDim) {
+              if (targetW > targetH) {
+                targetH = Math.round((targetH * maxDim) / targetW);
+                targetW = maxDim;
+              } else {
+                targetW = Math.round((targetW * maxDim) / targetH);
+                targetH = maxDim;
+              }
+            }
+
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = targetW;
+            offCanvas.height = targetH;
+            const offCtx = offCanvas.getContext('2d');
+            offCtx.drawImage(img, 0, 0, targetW, targetH);
+
+            const optImg = new Image();
+            optImg.onload = () => {
+              rawSourceImage = optImg;
+              imgOffsetX = 0;
+              imgOffsetY = 0;
+              imgScale = 1.0;
+              imgRotation = 0;
+              imgBrightness = 1.0;
+              isFlippedH = false;
+              document.getElementById('slider-scale').value = 1.0;
+              document.getElementById('val-scale').innerText = '1.0';
+              document.getElementById('slider-rotate').value = 0;
+              document.getElementById('val-rotate').innerText = '0°';
+              document.getElementById('slider-brightness').value = 1.0;
+              document.getElementById('val-brightness').innerText = '1.0';
+
+              processImageBackground(rawSourceImage);
+            };
+            optImg.src = offCanvas.toDataURL('image/png');
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      document.getElementById('chk-remove-bg').addEventListener('change', (e) => {
+        removeBg = e.target.checked;
+        document.getElementById('group-tolerance').style.display = removeBg ? 'block' : 'none';
+        if (rawSourceImage) {
+          processImageBackground(rawSourceImage);
+        }
+      });
+
+      // 監聽車體對側是否鏡像開關
+      document.getElementById('chk-mirror-opposite').addEventListener('change', (e) => {
+        mirrorOppositeSide = e.target.checked;
+        applyImageToTramWindows();
+      });
+
+      document.getElementById('slider-tolerance').addEventListener('input', (e) => {
+        bgTolerance = parseInt(e.target.value);
+        document.getElementById('val-tolerance').innerText = bgTolerance;
+        if (rawSourceImage) {
+          processImageBackground(rawSourceImage);
+        }
+      });
+
+      document.getElementById('btn-flip-h').addEventListener('click', () => {
+        if (!loadedImage) return;
+        isFlippedH = !isFlippedH;
+        drawPreviewCanvas();
+        applyImageToTramWindows();
+      });
+
+      document.getElementById('slider-scale').addEventListener('input', (e) => {
+        imgScale = parseFloat(e.target.value);
+        document.getElementById('val-scale').innerText = imgScale.toFixed(2);
+        drawPreviewCanvas();
+        applyImageToTramWindows();
+      });
+
+      document.getElementById('slider-rotate').addEventListener('input', (e) => {
+        imgRotation = parseInt(e.target.value);
+        document.getElementById('val-rotate').innerText = imgRotation + '°';
+        drawPreviewCanvas();
+        applyImageToTramWindows();
+      });
+
+      document.getElementById('slider-brightness').addEventListener('input', (e) => {
+        imgBrightness = parseFloat(e.target.value);
+        document.getElementById('val-brightness').innerText = imgBrightness.toFixed(2);
+        drawPreviewCanvas();
+        applyImageToTramWindows();
+      });
+
+      document.getElementById('btn-apply-img').addEventListener('click', () => {
+        applyImageToTramWindows();
+        toastEl.innerText = "純透明去背圖片已成功更新至車身！";
+        toastEl.style.opacity = '1';
+        setTimeout(() => toastEl.style.opacity = '0', 2500);
+      });
+
+      dockBtnFollow.addEventListener('click', () => {
+        followMode = (followMode + 1) % 3;
+        if (followMode === 1) {
+          dockBtnFollow.innerText = "🎥 跟拍中：Chili";
+          dockBtnFollow.classList.add('active');
+        } else if (followMode === 2) {
+          dockBtnFollow.innerText = "🎥 跟拍中：White 6";
+          dockBtnFollow.classList.add('active');
+        } else {
+          dockBtnFollow.innerText = "🎥 跟拍視角：自由視角";
+          dockBtnFollow.classList.remove('active');
+          camera.position.set(22, 8, 18);
+          controls.target.set(0, 1.5, 0);
+          controls.update();
+        }
+      });
+
+      dockBtnPause.addEventListener('click', () => {
+        isDriving = !isDriving;
+        if (isDriving) {
+          dockBtnPause.innerText = "⏸ 暫停行駛";
+          dockBtnPause.classList.remove('active');
+        } else {
+          dockBtnPause.innerText = "▶ 繼續行駛";
+          dockBtnPause.classList.add('active');
+        }
+      });
+
+      document.getElementById('color-banner-bg').addEventListener('input', (e) => {
+        bannerBgColor = e.target.value;
+        updateAllBannerCanvas();
+      });
+
+      document.getElementById('color-banner-text').addEventListener('input', (e) => {
+        bannerTextColor = e.target.value;
+        updateAllBannerCanvas();
+      });
+
+      document.getElementById('btn-update-text').addEventListener('click', () => {
+        updateMessageListFromInput();
+        carAIndex = 0;
+        carBIndex = 1 % messageList.length;
+        updateAllBannerCanvas();
+      });
+
+      document.getElementById('slider-opacity').addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        document.getElementById('val-opacity').innerText = val.toFixed(2);
+        if (materialA) materialA.opacity = val;
+        if (materialB) materialB.opacity = val;
+      });
+
+      document.getElementById('slider-speed').addEventListener('input', (e) => {
+        driveSpeed = parseFloat(e.target.value);
+        document.getElementById('val-speed').innerText = driveSpeed;
+      });
+
+      document.getElementById('btn-reset-cam').addEventListener('click', () => {
+        followMode = 0;
+        dockBtnFollow.innerText = "🎥 跟拍視角：自由視角";
+        dockBtnFollow.classList.remove('active');
+        camera.position.set(22, 8, 18);
+        controls.target.set(0, 1.5, 0);
+        controls.update();
+      });
+
+      document.getElementById('btn-toggle-rotate').addEventListener('click', () => {
+        autoRotate = !autoRotate;
+        controls.autoRotate = autoRotate;
+      });
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (isDriving && modelA && modelB) {
+        const delta = driveSpeed * 0.04;
+
+        carAPosX += delta;
+        if (carAPosX > trackLength / 2) {
+          carAPosX = -trackLength / 2;
+          updateCarATextureNextShift();
+        }
+        modelA.position.x = carAPosX;
+
+        carBPosX -= delta;
+        if (carBPosX < -trackLength / 2) {
+          carBPosX = trackLength / 2;
+          updateCarBTextureNextShift();
+        }
+        modelB.position.x = carBPosX;
+      }
+
+      if (followMode === 1 && modelB) {
+        const targetPos = modelB.position;
+        controls.target.copy(targetPos).add(new THREE.Vector3(0, 1.5, 0));
+        camera.position.set(targetPos.x - 12, targetPos.y + 4, targetPos.z - 7);
+      } else if (followMode === 2 && modelA) {
+        const targetPos = modelA.position;
+        controls.target.copy(targetPos).add(new THREE.Vector3(0, 1.5, 0));
+        camera.position.set(targetPos.x + 12, targetPos.y + 4, targetPos.z + 7);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
+</html>
