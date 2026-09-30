@@ -352,10 +352,9 @@
           <span>✨ 智慧連通背景去背 (自動轉純透明)</span>
         </label>
 
-        <!-- 新增：車體對側是否左右鏡像選單 -->
         <label class="checkbox-row">
           <input type="checkbox" id="chk-mirror-opposite" checked />
-          <span>↔️ 車體對側 (左側) 圖片左右鏡像</span>
+          <span>↔ 車體對側 (左側) 圖片左右鏡像</span>
         </label>
 
         <div class="control-group" id="group-tolerance">
@@ -441,7 +440,8 @@
     let bannerBgColor = "#0f2027";
     let bannerTextColor = "#ffffff";
 
-    let followMode = 0;
+    let followMode = 0; // 0: 自由視角, 1: 跟拍 Chili, 2: 跟拍 White 6
+    let followOffset = new THREE.Vector3(); // 紀錄相機相對於電車的偏移向量
 
     let messageList = [];
     let carAIndex = 0; 
@@ -454,8 +454,8 @@
     let carAPosX = -20;
     let carBPosX = 20;
 
-    let rawSourceImage = null; // 原始圖片
-    let loadedImage = null;    // 去背後圖像
+    let rawSourceImage = null; 
+    let loadedImage = null;    
     let imgOffsetX = 0;
     let imgOffsetY = 0;
     let imgScale = 1.0;
@@ -464,7 +464,7 @@
     let isFlippedH = false; 
     let removeBg = true;
     let bgTolerance = 35;
-    let mirrorOppositeSide = true; // 車體對側是否左右鏡像控制變數
+    let mirrorOppositeSide = true;
 
     const previewCanvas = document.getElementById('preview-canvas');
     const previewCtx = previewCanvas.getContext('2d');
@@ -497,6 +497,17 @@
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
       controls.target.set(0, 1.5, 0);
+
+      // 當使用者用觸控或滑鼠調整視角時，即時重新計算相機與電車的相對距離
+      controls.addEventListener('change', () => {
+        if (followMode === 1 && modelB) {
+          const carTarget = modelB.position.clone().add(new THREE.Vector3(0, 1.4, 0));
+          followOffset.subVectors(camera.position, carTarget);
+        } else if (followMode === 2 && modelA) {
+          const carTarget = modelA.position.clone().add(new THREE.Vector3(0, 1.4, 0));
+          followOffset.subVectors(camera.position, carTarget);
+        }
+      });
 
       const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
       scene.add(ambientLight);
@@ -840,7 +851,6 @@
       return canvas;
     }
 
-    // 智慧連通背景去背演算法
     function processImageBackground(imgObj) {
       if (!removeBg) {
         loadedImage = imgObj;
@@ -958,7 +968,6 @@
       }
     }
 
-    // 產生純透明 Alpha 底色的 3D 貼圖 Canvas（可控制是否對側鏡像）
     function generateCleanTextureCanvas(shouldMirror = false) {
       const cleanCanvas = document.createElement('canvas');
       cleanCanvas.width = previewCanvas.width;
@@ -999,7 +1008,6 @@
 
     function applyImageToTramWindows() {
       const rightImg = generateCleanTextureCanvas(false);
-      // 根據使用者設定決定對側 (左側) 是否進行水平鏡像翻轉
       const leftImg = generateCleanTextureCanvas(mirrorOppositeSide);
 
       if (windowTextureARight) {
@@ -1181,7 +1189,6 @@
         }
       });
 
-      // 監聽車體對側是否鏡像開關
       document.getElementById('chk-mirror-opposite').addEventListener('change', (e) => {
         mirrorOppositeSide = e.target.checked;
         applyImageToTramWindows();
@@ -1235,9 +1242,13 @@
         if (followMode === 1) {
           dockBtnFollow.innerText = "🎥 跟拍中：Chili";
           dockBtnFollow.classList.add('active');
+          // 初始化跟拍預設角度 offset
+          followOffset.set(-11, 2.2, -6.5);
         } else if (followMode === 2) {
           dockBtnFollow.innerText = "🎥 跟拍中：White 6";
           dockBtnFollow.classList.add('active');
+          // 初始化跟拍預設角度 offset
+          followOffset.set(11, 2.2, 6.5);
         } else {
           dockBtnFollow.innerText = "🎥 跟拍視角：自由視角";
           dockBtnFollow.classList.remove('active');
@@ -1329,14 +1340,17 @@
         modelB.position.x = carBPosX;
       }
 
+      // 支援雙指/觸控微調的動態動態跟拍邏輯
       if (followMode === 1 && modelB) {
-        const targetPos = modelB.position;
-        controls.target.copy(targetPos).add(new THREE.Vector3(0, 1.5, 0));
-        camera.position.set(targetPos.x - 12, targetPos.y + 4, targetPos.z - 7);
+        const carTarget = modelB.position.clone().add(new THREE.Vector3(0, 1.4, 0));
+        controls.target.copy(carTarget);
+        // 使用記錄下來的 followOffset 向量平移相機，保持手勢調整後的視角與縮放
+        camera.position.copy(carTarget).add(followOffset);
       } else if (followMode === 2 && modelA) {
-        const targetPos = modelA.position;
-        controls.target.copy(targetPos).add(new THREE.Vector3(0, 1.5, 0));
-        camera.position.set(targetPos.x + 12, targetPos.y + 4, targetPos.z + 7);
+        const carTarget = modelA.position.clone().add(new THREE.Vector3(0, 1.4, 0));
+        controls.target.copy(carTarget);
+        // 使用記錄下來的 followOffset 向量平移相機，保持手勢調整後的視角與縮放
+        camera.position.copy(carTarget).add(followOffset);
       }
 
       controls.update();
