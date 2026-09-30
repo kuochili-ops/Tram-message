@@ -49,6 +49,12 @@
       display: none;
     }
 
+    /* 錄影模式下隱藏介面 */
+    body.is-recording .dashboard,
+    body.is-recording .bottom-dock {
+      display: none !important;
+    }
+
     .dashboard-header {
       padding: 14px 18px;
       display: flex;
@@ -287,6 +293,17 @@
       border-color: #61afef;
     }
 
+    .dock-btn-record {
+      background: #e06c75;
+      color: #fff;
+    }
+
+    .dock-btn-record:hover {
+      background: #f44747;
+      color: #fff;
+      border-color: #f44747;
+    }
+
     .toast {
       position: fixed;
       bottom: 85px;
@@ -319,10 +336,11 @@
   <div id="toast" class="toast">圖片已成功更新至車身！</div>
   <div id="canvas-container"></div>
 
-  <!-- 常駐控制列（橫式並排） -->
+  <!-- 常駐控制列（橫式並排，含錄影按鈕） -->
   <div class="bottom-dock">
     <button class="dock-btn" id="dock-btn-follow">🎥 跟拍視角：自由視角</button>
     <button class="dock-btn" id="dock-btn-pause">⏸️ 暫停行駛</button>
+    <button class="dock-btn dock-btn-record" id="dock-btn-record">🔴 自動錄影並下載</button>
   </div>
 
   <!-- 控制面板 (預設收合) -->
@@ -441,11 +459,17 @@
     let bannerTextColor = "#ffffff";
 
     let followMode = 0; // 0: 自由視角, 1: 跟拍 Chili, 2: 跟拍 White 6
-    let followOffset = new THREE.Vector3(); // 紀錄相機相對於電車的偏移向量
+    let followOffset = new THREE.Vector3();
 
     let messageList = [];
     let carAIndex = 0; 
     let carBIndex = 1; 
+
+    // 錄影控制狀態變數
+    let isRecording = false;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let recordShiftCount = 0; // 計算訊息輪播次數
 
     const trackDistance = 3.6;  
     const trackLength = 160.0;
@@ -475,6 +499,7 @@
 
     const dockBtnFollow = document.getElementById('dock-btn-follow');
     const dockBtnPause = document.getElementById('dock-btn-pause');
+    const dockBtnRecord = document.getElementById('dock-btn-record');
 
     init();
 
@@ -486,7 +511,7 @@
       camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
       camera.position.set(22, 8, 18);
 
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.shadowMap.enabled = true;
@@ -498,7 +523,6 @@
       controls.dampingFactor = 0.05;
       controls.target.set(0, 1.5, 0);
 
-      // 當使用者用觸控或滑鼠調整視角時，即時重新計算相機與電車的相對距離
       controls.addEventListener('change', () => {
         if (followMode === 1 && modelB) {
           const carTarget = modelB.position.clone().add(new THREE.Vector3(0, 1.4, 0));
@@ -1105,6 +1129,12 @@
       carAIndex = (carAIndex + 1) % messageList.length;
       textureA.image = createMaxTextCanvas(messageList[carAIndex]);
       textureA.needsUpdate = true;
+
+      // 如果正在錄影，累計切換次數並檢查是否完成整套輪播
+      if (isRecording) {
+        recordShiftCount++;
+        checkAutoStopRecording();
+      }
     }
 
     function updateCarBTextureNextShift() {
@@ -1123,6 +1153,92 @@
         textureB.image = createMaxTextCanvas(messageList[carBIndex]);
         textureB.needsUpdate = true;
       }
+    }
+
+    // 自動錄影控制邏輯
+    function startAutoRecording() {
+      if (isRecording) return;
+
+      recordedChunks = [];
+      recordShiftCount = 0;
+
+      // 1. 確保電車正常行駛
+      isDriving = true;
+      dockBtnPause.innerText = "⏸ 暫停行駛";
+      dockBtnPause.classList.remove('active');
+
+      // 2. 將電車重置至起始狀態，確保完整的訊息輪播
+      carAPosX = -trackLength / 2;
+      carAIndex = 0;
+      if (textureA) {
+        textureA.image = createMaxTextCanvas(messageList[0]);
+        textureA.needsUpdate = true;
+      }
+
+      // 3. 隱藏 UI，並設定全螢幕錄影樣式
+      document.body.classList.add('is-recording');
+
+      // 4. 捕捉 3D Canvas 畫面串流 (60 FPS)
+      const canvas = renderer.domElement;
+      const stream = canvas.captureStream(60);
+
+      // 選擇系統支援的高畫質編碼格式
+      let options = { mimeType: 'video/webm;codecs=vp9' };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: 'video/webm' };
+      }
+
+      mediaRecorder = new MediaRecorder(stream, options);
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordedChunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = saveRecordedVideo;
+
+      mediaRecorder.start();
+      isRecording = true;
+
+      toastEl.innerText = "🎬 自動錄影中... 輪播結束後自動下載";
+      toastEl.style.opacity = '1';
+      setTimeout(() => toastEl.style.opacity = '0', 3000);
+    }
+
+    function checkAutoStopRecording() {
+      // 當所有訊息陣列（每行）均跑完一輪後自動停止錄影
+      if (recordShiftCount >= messageList.length) {
+        stopAutoRecording();
+      }
+    }
+
+    function stopAutoRecording() {
+      if (!isRecording || !mediaRecorder) return;
+      isRecording = false;
+      mediaRecorder.stop();
+      document.body.classList.remove('is-recording');
+    }
+
+    function saveRecordedVideo() {
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `Tram_Message_Show_${Date.now()}.webm`;
+      document.body.appendChild(a);
+      a.click();
+
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+
+      toastEl.innerText = "✅ 影片錄製完成，檔案已開始下載！";
+      toastEl.style.opacity = '1';
+      setTimeout(() => toastEl.style.opacity = '0', 3500);
     }
 
     function setupUIControls() {
@@ -1242,12 +1358,10 @@
         if (followMode === 1) {
           dockBtnFollow.innerText = "🎥 跟拍中：Chili";
           dockBtnFollow.classList.add('active');
-          // 初始化跟拍預設角度 offset
           followOffset.set(-11, 2.2, -6.5);
         } else if (followMode === 2) {
           dockBtnFollow.innerText = "🎥 跟拍中：White 6";
           dockBtnFollow.classList.add('active');
-          // 初始化跟拍預設角度 offset
           followOffset.set(11, 2.2, 6.5);
         } else {
           dockBtnFollow.innerText = "🎥 跟拍視角：自由視角";
@@ -1267,6 +1381,11 @@
           dockBtnPause.innerText = "▶ 繼續行駛";
           dockBtnPause.classList.add('active');
         }
+      });
+
+      // 監聽自動錄影按鈕
+      dockBtnRecord.addEventListener('click', () => {
+        startAutoRecording();
       });
 
       document.getElementById('color-banner-bg').addEventListener('input', (e) => {
@@ -1340,16 +1459,13 @@
         modelB.position.x = carBPosX;
       }
 
-      // 支援雙指/觸控微調的動態動態跟拍邏輯
       if (followMode === 1 && modelB) {
         const carTarget = modelB.position.clone().add(new THREE.Vector3(0, 1.4, 0));
         controls.target.copy(carTarget);
-        // 使用記錄下來的 followOffset 向量平移相機，保持手勢調整後的視角與縮放
         camera.position.copy(carTarget).add(followOffset);
       } else if (followMode === 2 && modelA) {
         const carTarget = modelA.position.clone().add(new THREE.Vector3(0, 1.4, 0));
         controls.target.copy(carTarget);
-        // 使用記錄下來的 followOffset 向量平移相機，保持手勢調整後的視角與縮放
         camera.position.copy(carTarget).add(followOffset);
       }
 
